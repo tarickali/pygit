@@ -1,10 +1,11 @@
 from typing import Annotated
-import os
-import zlib
-import hashlib
-import pathlib
-
 import typer
+
+import os
+from pathlib import Path
+import zlib
+
+from .helpers import create_blob, create_tree
 
 __all__ = ["app"]
 
@@ -39,7 +40,7 @@ def cat_file(
         typer.Abort()
         return
 
-    blob_path = pathlib.Path(f".git/objects/{blob_hash[:2]}/{blob_hash[2:]}")
+    blob_path = Path(f".git/objects/{blob_hash[:2]}/{blob_hash[2:]}")
 
     if not os.path.exists(blob_path):
         print(f"Blob with hash:{blob_hash} does not exist")
@@ -56,23 +57,10 @@ def cat_file(
 
 @app.command()
 def hash_object(
-    file_path: Annotated[str, typer.Argument()],
+    file: Annotated[str, typer.Argument()],
     write: Annotated[bool, typer.Option("-w")] = False,
 ) -> None:
-    with open(pathlib.Path(file_path), "r") as file:
-        content = file.read()
-
-    blob = f"blob {len(content)}\0{content}".encode()
-    blob_hash = hashlib.sha1(blob).hexdigest()
-
-    blob_directory = pathlib.Path(f".git/objects/{blob_hash[:2]}")
-    blob_file_path = blob_directory / pathlib.Path(blob_hash[2:])
-
-    if write:
-        os.makedirs(blob_directory, exist_ok=True)
-        with open(blob_file_path, "bw") as file:
-            file.write(zlib.compress(blob))
-
+    blob_hash = create_blob(Path(file), write)
     print(blob_hash)
 
 
@@ -81,7 +69,7 @@ def ls_tree(
     tree_hash: Annotated[str, typer.Argument()],
     name_only: Annotated[bool, typer.Option("--name-only")] = False,
 ) -> None:
-    tree_path = pathlib.Path(f".git/objects/{tree_hash[:2]}/{tree_hash[2:]}")
+    tree_path = Path(f".git/objects/{tree_hash[:2]}/{tree_hash[2:]}")
     with open(tree_path, "br") as file:
         tree = zlib.decompress(file.read())
 
@@ -111,3 +99,9 @@ def ls_tree(
             print(obj[-1])
         else:
             print(f"{obj[0]} {obj[1]} {obj[2]}\t{obj[3]}")
+
+
+@app.command()
+def write_tree() -> None:
+    tree_hash = create_tree(Path("."))
+    print(tree_hash)
