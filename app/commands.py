@@ -70,7 +70,44 @@ def hash_object(
 
     if write:
         os.makedirs(blob_directory, exist_ok=True)
-        with open(blob_file_path, "wb+") as file:
+        with open(blob_file_path, "bw") as file:
             file.write(zlib.compress(blob))
 
     print(blob_hash)
+
+
+@app.command()
+def ls_tree(
+    tree_hash: Annotated[str, typer.Argument()],
+    name_only: Annotated[bool, typer.Option("--name-only")] = False,
+) -> None:
+    tree_path = pathlib.Path(f".git/objects/{tree_hash[:2]}/{tree_hash[2:]}")
+    with open(tree_path, "br") as file:
+        tree = zlib.decompress(file.read())
+
+    _, tree_entries = tree.split(b"\x00", maxsplit=1)
+
+    entries: list[bytes] = []
+    i = 0
+    while i < len(tree_entries):
+        j = tree_entries.find(0x00, i) + 21
+        entries.append(tree_entries[i:j])
+        i = j
+
+    objects: list[tuple[str, str, str, str]] = []
+    for entry in entries:
+        mode, rest = entry.split(b" ")
+        name, content = rest.split(b"\x00", maxsplit=1)
+
+        mode = mode.decode().zfill(6)
+        name = name.decode()
+        content = content.hex()
+        kind = "tree" if mode == "040000" else "blob"
+
+        objects.append((mode, kind, content, name))
+
+    for obj in objects:
+        if name_only:
+            print(obj[-1])
+        else:
+            print(f"{obj[0]} {obj[1]} {obj[2]}\t{obj[3]}")
