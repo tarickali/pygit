@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 import hashlib
+from datetime import datetime
 import zlib
 
 __all__ = ["create_blob", "create_tree"]
@@ -20,7 +21,7 @@ def create_blob(path: Path, write: bool = False) -> str:
         os.makedirs(blob_directory, exist_ok=True)
         with open(blob_path, "bw") as file:
             file.write(zlib.compress(blob))
-        os.chmod(blob_path, 444)
+        blob_path.chmod(0o444)
 
     return blob_hash
 
@@ -65,6 +66,38 @@ def create_tree(path: Path) -> str:
         os.makedirs(tree_directory, exist_ok=True)
         with open(tree_path, "wb") as f:
             f.write(zlib.compress(tree))
-        os.chmod(tree_path, 444)
+        tree_path.chmod(0o444)
 
     return tree_hash
+
+
+def create_commit(
+    tree_hash: str, messages: list[str], parents: list[str] = None
+) -> str:
+    author_name = committer_name = "tarickali"
+    author_email = committer_email = "tarickali97@gmail.com"
+    author_date_seconds = committer_date_seconds = datetime.now().timestamp()
+    author_date_timezone = committer_date_timezone = (
+        datetime.now().astimezone().strftime("%z")
+    )
+
+    content = f"tree {tree_hash}\n"
+    if parents is not None:
+        content += "\n".join(f"parent {parent}" for parent in parents) + "\n"
+    content += f"author {author_name} <{author_email}> {author_date_seconds} {author_date_timezone}\n"
+    content += f"committer {committer_name} <{committer_email}> {committer_date_seconds} {committer_date_timezone}\n"
+    content += "\n" + "\n\n".join(messages) + "\n"
+
+    commit = f"commit {len(content)}\0{content}".encode()
+    commit_hash = hashlib.sha1(commit).hexdigest()
+
+    commit_directory = Path(f".git/objects/{commit_hash[:2]}")
+    commit_path = commit_directory / Path(commit_hash[2:])
+
+    if not os.path.exists(commit_path):
+        os.makedirs(commit_directory, exist_ok=True)
+        with open(commit_path, "bw") as f:
+            f.write(zlib.compress(commit))
+        commit_path.chmod(0o444)
+
+    return commit_hash

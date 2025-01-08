@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import zlib
 
-from .helpers import create_blob, create_tree
+from .helpers import create_blob, create_tree, create_commit
 
 __all__ = ["app"]
 
@@ -105,3 +105,18 @@ def ls_tree(
 def write_tree() -> None:
     tree_hash = create_tree(Path("."))
     print(tree_hash)
+
+
+@app.command()
+def commit_tree(
+    tree_hash: Annotated[str, typer.Argument()],
+    messages: Annotated[list[str], typer.Option("-m")] = None,
+    parents: Annotated[list[str], typer.Option("-p")] = None,
+) -> None:
+    if messages is None:
+        print("No message given, aborting commit")
+        typer.Abort()
+        return
+
+    commit_hash = create_commit(tree_hash, messages, parents)
+    print(commit_hash)
